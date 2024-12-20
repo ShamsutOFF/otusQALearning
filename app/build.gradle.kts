@@ -3,6 +3,7 @@ plugins {
     application
     jacoco
     id("io.ktor.plugin") version "2.3.11"
+    kotlin("plugin.serialization").version("2.0.0")
 }
 
 repositories {
@@ -19,8 +20,18 @@ application {
     mainClass.set("App.kt")
 }
 
+val ktorVersion: String by project
+val logbackVersion: String by project
+
 dependencies {
-//    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    implementation("io.ktor:ktor-client-core:$ktorVersion")
+    implementation("io.ktor:ktor-client-cio:$ktorVersion")
+    implementation("ch.qos.logback:logback-classic:$logbackVersion")
+    implementation("io.ktor:ktor-client-logging:$ktorVersion")
+    implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
+
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation(libs.junit.jupiter.engine)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     implementation(libs.guava)
