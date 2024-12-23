@@ -68,7 +68,7 @@ private suspend fun getUniversities(): List<University> {
 }
 
 private fun initMongoDB(): MongoDatabase {
-    val url = "mongodb://localhost:27017"
+    val url = System.getenv("MONGO_URL") ?: "mongodb://localhost:27017"
 
     val serverApi = ServerApi.builder()
         .version(ServerApiVersion.V1)
