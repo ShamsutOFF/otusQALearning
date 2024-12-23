@@ -1,5 +1,10 @@
 package org.example
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.LoggerContext
+import com.mongodb.*
+import com.mongodb.kotlin.client.MongoClient
+import com.mongodb.kotlin.client.MongoDatabase
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
@@ -10,18 +15,9 @@ import io.ktor.client.statement.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import org.bson.Document
 import org.example.data.University
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-
-class App {
-    val greeting: String
-        get() {
-            return "@@@ Hello World from Docker Lesson!\n" + "Текущее время и дата: " + LocalDateTime.now().format(
-                DateTimeFormatter.ofPattern("HH:mm dd-MM-yyyy")
-            )
-        }
-}
+import org.slf4j.LoggerFactory
 
 private val client by lazy {
     HttpClient(CIO) {
@@ -37,8 +33,10 @@ private val client by lazy {
 }
 
 fun main() {
-    println(App().greeting)
-    val listOfUniversity = runBlocking { getUniversities() }
+    println("@@@ Запуск приложения")
+    val database = initMongoDB()
+    val collectionUniversities = database.getCollection<University>("Universities")
+    collectionUniversities.insertMany(runBlocking { getUniversities() })
 
     println("ПРИВЕТСВУЕМ ВАС В ПОИСКЕ ПО КАТАЛОГУ УНИВЕСИТЕТОВ РОССИЙСКОЙ ФЕДЕРАЦИИ!")
 
@@ -51,11 +49,11 @@ fun main() {
         } else if (input.isNullOrBlank()) {
             println("Вы должны что-то ввести.")
         } else {
-            val foundEntities = listOfUniversity.filter { it.name.equals(input, ignoreCase = true) }
-            if (foundEntities.isNotEmpty()) {
-                println("Найден университет:")
-                foundEntities.forEach { println(it) }
-            } else {
+            try {
+                val foundEntity: University = collectionUniversities.find(Document("name", input)).first()
+                println("По вашему запросу найден университет:")
+                println(foundEntity)
+            } catch (ex: MongoClientException) {
                 println("Ничего не найдено. Попробуйте снова.")
             }
         }
@@ -67,4 +65,27 @@ private suspend fun getUniversities(): List<University> {
     println(response.status)
     client.close()
     return response.body<List<University>>()
+}
+
+private fun initMongoDB(): MongoDatabase {
+    val url = "mongodb://localhost:27017"
+
+    val serverApi = ServerApi.builder()
+        .version(ServerApiVersion.V1)
+        .build()
+
+    val settings = MongoClientSettings.builder()
+        .applyConnectionString(ConnectionString(url))
+        .serverApi(serverApi)
+        .build()
+
+    LoggerFactory.getILoggerFactory().apply {
+        if (this is LoggerContext) {
+            this.getLogger("org.mongodb.driver").level = Level.OFF
+        }
+    }
+
+    val mongoClient = MongoClient.create(settings)
+    val database = mongoClient.getDatabase("OTUS")
+    return database
 }

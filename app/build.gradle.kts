@@ -12,12 +12,12 @@ repositories {
 
 ktor {
     fatJar {
-        archiveFileName.set("lesson11.jar")
+        archiveFileName.set("dz5.jar")
     }
 }
 
 application {
-    mainClass.set("App.kt")
+    mainClass = "org/example/AppKt"
 }
 
 val ktorVersion: String by project
@@ -31,6 +31,9 @@ dependencies {
     implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
 
+    //MongoDB
+    implementation("org.mongodb:mongodb-driver-kotlin-sync:5.2.1")
+
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation(libs.junit.jupiter.engine)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -43,8 +46,10 @@ java {
     }
 }
 
-application {
-    mainClass = "org.example.AppKt"
+tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+    doLast {
+        println("Shadow JAR created at: ${archiveFile.get().asFile.absolutePath}")
+    }
 }
 
 class OtusPlugin : Plugin<Project> {
