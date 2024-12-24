@@ -18,6 +18,7 @@ import kotlinx.serialization.json.Json
 import org.bson.Document
 import org.example.data.University
 import org.slf4j.LoggerFactory
+import java.util.*
 
 private val client by lazy {
     HttpClient(CIO) {
@@ -33,7 +34,10 @@ private val client by lazy {
 }
 
 fun main() {
-    println("@@@ Запуск приложения")
+    var attemptCounter = 0
+    val maxAttempts = 5
+
+    println("@@@ Запуск приложения 2")
     val database = initMongoDB()
     val collectionUniversities = database.getCollection<University>("Universities")
     collectionUniversities.insertMany(runBlocking { getUniversities() })
@@ -43,19 +47,35 @@ fun main() {
     while (true) {
         print("\nВведите название университета на английском языке (или 'exit' для выхода): ")
         val input = readlnOrNull()
+
         if (input.equals("exit", ignoreCase = true)) {
             println("Завершение программы.")
             break
-        } else if (input.isNullOrBlank()) {
-            println("Вы должны что-то ввести.")
-        } else {
-            try {
-                val foundEntity: University = collectionUniversities.find(Document("name", input)).first()
-                println("По вашему запросу найден университет:")
-                println(foundEntity)
-            } catch (ex: MongoClientException) {
-                println("Ничего не найдено. Попробуйте снова.")
+        } else if (input != null) {
+            if (input.isBlank()) {
+                println("Вы должны что-то ввести.")
+                attemptCounter++
+                if (attemptCounter >= maxAttempts) {
+                    println("Превышено число попыток. Прекращение программы.")
+                    break
+                }
+            } else {
+                try {
+                    attemptCounter = 0 // сбрасываем счетчик при успешной операции
+                    val foundEntity: University = collectionUniversities.find(Document("name", input)).first()
+                    println("По вашему запросу найден университет:")
+                    println(foundEntity)
+                } catch (ex: MongoClientException) {
+                    println("Ничего не найдено. Попробуйте снова.")
+                    attemptCounter++
+                    if (attemptCounter >= maxAttempts) {
+                        println("Превышено число попыток. Прекращение программы.")
+                        break
+                    }
+                }
             }
+        } else{
+            println("Введен null !!!!")
         }
     }
 }
@@ -69,7 +89,7 @@ private suspend fun getUniversities(): List<University> {
 
 private fun initMongoDB(): MongoDatabase {
     val url = System.getenv("MONGO_URL") ?: "mongodb://localhost:27017"
-
+    println("@@@ initMongoDB() url = $url")
     val serverApi = ServerApi.builder()
         .version(ServerApiVersion.V1)
         .build()
