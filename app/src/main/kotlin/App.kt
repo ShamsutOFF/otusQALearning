@@ -1,10 +1,9 @@
-package org.example
-
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.LoggerContext
 import com.mongodb.*
 import com.mongodb.kotlin.client.MongoClient
 import com.mongodb.kotlin.client.MongoDatabase
+import data.University
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
@@ -16,9 +15,7 @@ import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.bson.Document
-import org.example.data.University
 import org.slf4j.LoggerFactory
-import java.util.*
 
 private val client by lazy {
     HttpClient(CIO) {
@@ -74,7 +71,7 @@ fun main() {
                     }
                 }
             }
-        } else{
+        } else {
             println("Введен null !!!!")
         }
     }
