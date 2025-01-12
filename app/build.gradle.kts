@@ -17,7 +17,7 @@ ktor {
 }
 
 application {
-    mainClass = "AppKt"
+    mainClass = "org/example/AppKt"
 }
 
 val ktorVersion: String by project
@@ -34,9 +34,6 @@ dependencies {
     //MongoDB
     implementation("org.mongodb:mongodb-driver-kotlin-sync:5.2.1")
 
-    //Tests
-//    testImplementation(kotlin("test"))
-    testImplementation("org.junit.jupiter:junit-jupiter-params:5.9.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation(libs.junit.jupiter.engine)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -46,28 +43,6 @@ dependencies {
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)
-    }
-}
-
-tasks.test {
-    useJUnitPlatform()
-}
-
-tasks.register<Test>("regress-tests") {
-    useJUnitPlatform {
-        includeTags("regress")
-    }
-}
-
-tasks.register<Test>("smoke-tests") {
-    useJUnitPlatform {
-        includeTags("smoke")
-    }
-}
-
-tasks.register<Test>("sanity-tests") {
-    useJUnitPlatform {
-        includeTags("sanity")
     }
 }
 
