@@ -58,10 +58,10 @@ fun main() {
                 }
             } else {
                 try {
-                    attemptCounter = 0 // сбрасываем счетчик при успешной операции
                     val foundEntity: University = collectionUniversities.find(Document("name", input)).first()
                     println("По вашему запросу найден университет:")
                     println(foundEntity)
+                    attemptCounter = 0 // сбрасываем счетчик при успешной операции
                 } catch (ex: MongoClientException) {
                     println("Ничего не найдено. Попробуйте снова.")
                     attemptCounter++
