@@ -12,13 +12,15 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.bson.Document
 import org.example.data.University
 import org.slf4j.LoggerFactory
-import java.util.*
+
+private val logger = LoggerFactory.getLogger("UniversityApp")
 
 private val client by lazy {
     HttpClient(CIO) {
@@ -33,63 +35,110 @@ private val client by lazy {
     }
 }
 
+private val database by lazy { initMongoDB() }
+private val collectionUniversities by lazy { database.getCollection<University>("Universities") }
+
 fun main() {
-    var attemptCounter = 0
-    val maxAttempts = 5
-
-    println("@@@ Запуск приложения 2")
-    val database = initMongoDB()
-    val collectionUniversities = database.getCollection<University>("Universities")
-    collectionUniversities.insertMany(runBlocking { getUniversities() })
-
-    println("ПРИВЕТСВУЕМ ВАС В ПОИСКЕ ПО КАТАЛОГУ УНИВЕСИТЕТОВ РОССИЙСКОЙ ФЕДЕРАЦИИ!")
-
-    while (true) {
-        print("\nВведите название университета на английском языке (или 'exit' для выхода): ")
-        val input = readlnOrNull()
-
-        if (input.equals("exit", ignoreCase = true)) {
-            println("Завершение программы.")
-            break
-        } else if (input != null) {
-            if (input.isBlank()) {
-                println("Вы должны что-то ввести.")
-                attemptCounter++
-                if (attemptCounter >= maxAttempts) {
-                    println("Превышено число попыток. Прекращение программы.")
-                    break
-                }
-            } else {
-                try {
-                    attemptCounter = 0 // сбрасываем счетчик при успешной операции
-                    val foundEntity: University = collectionUniversities.find(Document("name", input)).first()
-                    println("По вашему запросу найден университет:")
-                    println(foundEntity)
-                } catch (ex: MongoClientException) {
-                    println("Ничего не найдено. Попробуйте снова.")
-                    attemptCounter++
-                    if (attemptCounter >= maxAttempts) {
-                        println("Превышено число попыток. Прекращение программы.")
-                        break
-                    }
-                }
+    logger.info("ПРИВЕТСВУЕМ ВАС В ПОИСКЕ ПО КАТАЛОГУ УНИВЕСИТЕТОВ!")
+    client.use {
+        logger.info("Загрузка университетов...")
+        when (val result = runBlocking { loadUniversitiesToMongoDB() }) {
+            is Result.Success -> {
+                logger.info("Список университетов успешно загружен.")
+                getUniversities()
             }
-        } else{
-            println("Введен null !!!!")
+            is Result.Error -> {
+                logger.error("Ошибка при загрузке университетов: ${result.message}")
+                println("Произошла ошибка. Попробуйте снова.")
+            }
         }
     }
 }
 
-private suspend fun getUniversities(): List<University> {
-    val response: HttpResponse = client.get("http://universities.hipolabs.com/search?country=Russian%20Federation")
-    println(response.status)
-    client.close()
-    return response.body<List<University>>()
+private suspend fun loadUniversitiesToMongoDB(): Result<List<University>> {
+    val universities = getUniversitiesByCountry()
+    return if (universities is Result.Success) {
+        val existingNames = collectionUniversities.find().map { it.name }.toList().toSet()
+        val newUniversities = universities.data.filter { it.name !in existingNames }
+        if (newUniversities.isNotEmpty()) {
+            collectionUniversities.insertMany(newUniversities)
+            logger.info("Добавлено ${newUniversities.size} новых университетов.")
+            Result.Success(newUniversities)
+        } else {
+            logger.info("Новых университетов для добавления не найдено.")
+            Result.Success(emptyList())
+        }
+    } else {
+        universities
+    }
+}
+
+private fun getUniversities() {
+    while (true) {
+        print("\nВведите название университета на английском языке (или 'exit' для выхода): ")
+        val input = readlnOrNull()
+        when {
+            input.equals("exit", ignoreCase = true) -> {
+                println("Завершение программы.")
+                break
+            }
+            input.isNullOrBlank() -> println("Введите название университета.")
+            else -> findUniversityByName(input)
+        }
+    }
+}
+
+private fun findUniversityByName(name: String) {
+    try {
+        val foundEntity: University = collectionUniversities.find(Document("name", name)).first()
+        println("По вашему запросу найден университет:")
+        println(foundEntity)
+    } catch (ex: MongoClientException) {
+        println("Университет $name не найден. Попробуйте снова.")
+    }
+}
+
+private suspend fun getUniversitiesByCountry(): Result<List<University>> {
+    val listOfUniversities = mutableListOf<University>()
+    while (true) {
+        print("\nВведите название страны для поиска (или 'exit' для выхода): ")
+        val input = readlnOrNull()
+        when {
+            input.equals("exit", ignoreCase = true) -> {
+                println("Завершение программы.")
+                return Result.Error("Программа завершена.")
+            }
+            input.isNullOrBlank() -> {
+                println("Введите название страны.")
+            }
+            else -> {
+                val result = runCatching {
+                    val encodedCountry = input.encodeURLParameter()
+                    val response: HttpResponse = client.get("http://universities.hipolabs.com/search?country=$encodedCountry")
+                    logger.info("Ответ от сервера: ${response.status}")
+                    response.body<List<University>>()
+                }
+
+                result.onSuccess { universities ->
+                    if (universities.isNotEmpty()) {
+                        listOfUniversities.addAll(universities)
+                        println("Найдено ${universities.size} университетов для страны $input.")
+                        return Result.Success(listOfUniversities)
+                    } else {
+                        println("Для этой страны $input ничего не найдено. Попробуйте снова.")
+                    }
+                }.onFailure { ex ->
+                    logger.error("Ошибка при загрузке университетов: ${ex.message}")
+                    println("Произошла ошибка. Попробуйте снова.")
+                }
+            }
+        }
+    }
 }
 
 private fun initMongoDB(): MongoDatabase {
     val url = System.getenv("MONGO_URL") ?: "mongodb://localhost:27017"
-    println("@@@ initMongoDB() url = $url")
+    logger.info("@@@ initMongoDB() url = $url")
     val serverApi = ServerApi.builder()
         .version(ServerApiVersion.V1)
         .build()
@@ -108,4 +157,9 @@ private fun initMongoDB(): MongoDatabase {
     val mongoClient = MongoClient.create(settings)
     val database = mongoClient.getDatabase("OTUS")
     return database
+}
+
+sealed class Result<out T> {
+    data class Success<out T>(val data: T) : Result<T>()
+    data class Error(val message: String) : Result<Nothing>()
 }
